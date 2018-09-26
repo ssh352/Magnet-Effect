@@ -3,7 +3,7 @@ library(lubridate)
 library(zoo)
 library(Sim.DiffProc)
 library(cnquant)
-load("~/Documents/Stock Data/D-Stock-Daily-Data.RData")
+load("~/Documents/Stock-Data/D-Stock-Daily-Data.RData")
 
 # 初筛样本，需要的变量和样本期 ----
 start_date <- "20141009"  # Tick数据开始的时间
@@ -138,10 +138,9 @@ Stock_Daily_Data5 <- Stock_Daily_Data4 %>%
                       as.integer(t1 - parse_time("093000", format = "%H%M%S")), 
                       as.integer(t1 - parse_time("130000", format = "%H%M%S")) + 7200L), 
          up09 = up09 / 10000, 
-         N = round((14400 - t1) / 3), 
+         N = as.integer(round((14400 - t1) / 3)), 
          t1 = t1 / 14400) %>% 
-  filter(!is.na(t1)) %>% 
-  filter(t1 < 1) %>% 
+  filter(t1 <= 14394/14400) %>% 
   mutate(REACH_UP = S_DQ_HIGH == UP_LIMIT_PRICE)
 
 # 计算触及涨停板概率的函数
@@ -159,17 +158,19 @@ prob_reach_up <- function(N, x0, t0, theta, sigma, up_limit_price) {
 # 计算触及涨停板的概率
 system.time(
   Stock_Daily_Data6 <- Stock_Daily_Data5 %>% 
-    slice(1:1000) %>% 
     mutate(PROB_REACH_UP = mapply(prob_reach_up, N, up09, t1, mu, sigma, UP_LIMIT_PRICE, USE.NAMES = FALSE))
 )
 
+save.image()
+
 # 理论概率与真实概率
 Stock_Daily_Data6 %>% 
-  filter(t1 != 0) %>% 
-  filter(N < 4800) %>% 
+  filter(t1 != 0) %>%
+  filter(N < 4800) %>%
   summarise(mean(REACH_UP), 
             mean(UP_DOWN_LIMIT_STATUS == 1, na.rm = TRUE), 
-            mean(PROB_REACH_UP))
+            mean(PROB_REACH_UP), 
+            p.value = t.test(REACH_UP, PROB_REACH_UP)$p.value)
 
 
 # 日最大收益率的分布
