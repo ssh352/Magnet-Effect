@@ -1,0 +1,12 @@
+---
+title: 'Contrived scale line as a collapsaro: evidence from China stock market''s
+  price limit rules'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+
