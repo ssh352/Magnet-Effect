@@ -129,18 +129,6 @@ Stock_Daily_Data <- Stock_Daily_Data %>%
 
 
 # Tick数据确定涨跌超过阈值时间点 ----
-# 添加需要的变量
-Stock_Daily_Data2 <- Stock_Daily_Data %>% 
-  # 生成tick文件路径
-  mutate(tick_path = if_else(
-    substr(S_INFO_WINDCODE, 1L, 1L) == 6, 
-    paste0(path_to_red_ashare, "/Tick/SH/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
-    paste0(path_to_red_ashare, "/Tick/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv")
-  )) %>% 
-  # tick文件中需要用到的整数阈值价格
-  mutate(UP_THRESHOLD_INT = as.integer(UP_THRESHOLD * 10000), 
-         DOWN_THRESHOLD_INT = as.integer(DOWN_THRESHOLD * 10000))
-
 # 从Tick文件中匹配第一次超过特定价格的时间的函数
 match_time_up <- function(path, threshold) {
   # path为tick文件路径
@@ -177,21 +165,29 @@ match_time_vector <- function(path, threshold, index, direction = "up") {
   return(t1)
 }
 
+# 添加需要的变量
+Stock_Daily_Data2 <- Stock_Daily_Data %>% 
+  # 生成tick文件路径
+  mutate(tick_path = if_else(
+    substr(S_INFO_WINDCODE, 1L, 1L) == 6, 
+    paste0(path_to_red_ashare, "/Tick/SH/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
+    paste0(path_to_red_ashare, "/Tick/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv")
+  )) %>% 
+  # tick文件中需要用到的整数阈值价格
+  mutate(UP_THRESHOLD_INT = as.integer(UP_THRESHOLD * 10000), 
+         DOWN_THRESHOLD_INT = as.integer(DOWN_THRESHOLD * 10000))
+
 # 计算t1
 system.time(
-Stock_Daily_Data2 <- Stock_Daily_Data2 %>% 
+Stock_Daily_Data3 <- Stock_Daily_Data2 %>% 
   mutate(UP_t1 = match_time_vector(tick_path, 
                                    UP_THRESHOLD_INT, 
                                    index = S_DQ_HIGH >= UP_THRESHOLD, 
-                                   direction = "up"))
-)
-
-system.time(
-  Stock_Daily_Data3 <- Stock_Daily_Data2 %>% 
-    mutate(DOWN_t1 = match_time_vector(tick_path, 
-                                       DOWN_THRESHOLD_INT, 
-                                       index = S_DQ_LOW <= DOWN_THRESHOLD, 
-                                       direction = "down"))
+                                   direction = "up"), 
+         DOWN_t1 = match_time_vector(tick_path, 
+                                     DOWN_THRESHOLD_INT, 
+                                     index = S_DQ_LOW <= DOWN_THRESHOLD, 
+                                     direction = "down"))
 )
 
 
@@ -250,20 +246,16 @@ prob_reach_down <- function(N, x0, t0, theta, sigma, down_limit) {
 system.time(
   Stock_Daily_Data4_UP <- Stock_Daily_Data4 %>% 
     filter(REACH_UP_THRESHOLD & between(UP_N, 2L, 4798L)) %>% 
-    mutate(PROB_REACH_UP_LIMIT = mcmapply(prob_reach_up, UP_N, UP_THRESHOLD, UP_t1, mu, sigma, UP_LIMIT, USE.NAMES = FALSE)
-           # , 
-           # PROB_REACH_UP_LIMIT_hf = mcmapply(prob_reach_up, UP_N, UP_THRESHOLD, UP_t1, mu_hf, sigma_hf, UP_LIMIT, USE.NAMES = FALSE)
-           )
+    mutate(PROB_REACH_UP_LIMIT = mcmapply(prob_reach_up, UP_N, UP_THRESHOLD, UP_t1, mu, sigma, UP_LIMIT, USE.NAMES = FALSE), 
+           PROB_REACH_UP_LIMIT_hf = mcmapply(prob_reach_up, UP_N, UP_THRESHOLD, UP_t1, mu_hf, sigma_hf, UP_LIMIT, USE.NAMES = FALSE))
 )
 
 # 计算触及跌停的概率
 system.time(
   Stock_Daily_Data4_DOWN <- Stock_Daily_Data4 %>% 
     filter(REACH_DOWN_THRESHOLD & between(DOWN_N, 2L, 4798L)) %>% 
-    mutate(PROB_REACH_DOWN_LIMIT = mcmapply(prob_reach_down, DOWN_N, DOWN_THRESHOLD, DOWN_t1, mu, sigma, DOWN_LIMIT, USE.NAMES = FALSE)
-           # , 
-           # PROB_REACH_DOWN_LIMIT_hf = mcmapply(prob_reach_down, DOWN_N, DOWN_THRESHOLD, DOWN_t1, mu_hf, sigma_hf, DOWN_LIMIT, USE.NAMES = FALSE)
-           )
+    mutate(PROB_REACH_DOWN_LIMIT = mcmapply(prob_reach_down, DOWN_N, DOWN_THRESHOLD, DOWN_t1, mu, sigma, DOWN_LIMIT, USE.NAMES = FALSE), 
+           PROB_REACH_DOWN_LIMIT_hf = mcmapply(prob_reach_down, DOWN_N, DOWN_THRESHOLD, DOWN_t1, mu_hf, sigma_hf, DOWN_LIMIT, USE.NAMES = FALSE))
 )
 
 save.image("data/01-D-First-Complete-Data.RData")
@@ -273,7 +265,7 @@ save.image("data/01-D-First-Complete-Data.RData")
 # 日最大收益率的分布
 Stock_Daily_Data0 %>% 
   mutate(HIGH_PCTCHANGE = S_DQ_HIGH / S_DQ_PRECLOSE - 1) %>% 
-  ggplot(aes(x = HIGH_PCTCHANGE)) +
+  ggplot(aes(x = HIGH_PCTCHANGE)) + 
   geom_histogram(binwidth = 0.0001)
 
 

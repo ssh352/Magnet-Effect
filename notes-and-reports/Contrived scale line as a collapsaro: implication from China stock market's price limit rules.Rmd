@@ -1,12 +1,140 @@
 ---
 title: 'Contrived scale line as a collapsaro: evidence from China stock market''s
   price limit rules'
-output: pdf_document
+output: 
+  pdf_document:
+    dev: cairo_pdf
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(cnquant)
+library(knitr)
+library(kableExtra)
+load("../data/01-D-First-Complete-Data.RData")
+options(knitr.kable.NA = "-")
+knitr::opts_chunk$set(echo = FALSE, fig.align = "center")
+theme_set(
+  theme_minimal(base_size = 11, base_family = "STSong") + 
+    theme(
+      legend.position = c(1, 1), 
+      legend.justification = c(1, 1), 
+      legend.spacing = unit(8, "pt"), 
+      legend.box = "horizontal", 
+      legend.title = element_text(size = 10), 
+      legend.text = element_text(size = 8), 
+      legend.background = element_rect(fill = "white", colour = FALSE)
+    )
+)
 ```
 
+# Background
+
+Distribution of maximum and minimum daily price percent change
+
+```{r high_pctchange_dist, message=FALSE}
+# 日最大收益率的分布
+p1 <- Stock_Daily_Data0 %>% 
+  mutate(HIGH_PCTCHANGE = S_DQ_HIGH / S_DQ_PRECLOSE - 1) %>% 
+  ggplot(aes(x = HIGH_PCTCHANGE)) +
+  geom_histogram(binwidth = 0.0001) + 
+  scale_x_continuous(labels = percent) + 
+  coord_cartesian(ylim = c(0, 5000)) + 
+  labs(x = "Maximum price percent change in the day", 
+       y = "Count")
+p1_zoom <- p1 + 
+  coord_cartesian(xlim = c(0.08, 0.1), ylim = c(0, 5000))
+
+p2 <- Stock_Daily_Data0 %>% 
+  mutate(LOW_PCTCHANGE = S_DQ_LOW / S_DQ_PRECLOSE - 1) %>% 
+  ggplot(aes(x = LOW_PCTCHANGE)) +
+  geom_histogram(binwidth = 0.0001) + 
+  scale_x_continuous(labels = percent) + 
+  coord_cartesian(ylim = c(0, 5000)) + 
+  labs(x = "Minimum price percent change in the day", 
+       y = "Count")
+p2_zoom <- p2 + 
+  coord_cartesian(xlim = c(-0.1, -0.08), ylim = c(0, 5000))
+
+Rmisc::multiplot(p1, p1_zoom, p2, p2_zoom, cols = 2)
+```
+
+```{r}
+basic_count <- tibble(
+  Type = c("All", "Upper", "Lower"), 
+  `Obs. All` = nrow(Stock_Daily_Data0), 
+  `Obs. Reach 9%` = c(Stock_Daily_Data %>% nrow(), 
+                      Stock_Daily_Data %>% filter(REACH_UP_THRESHOLD) %>% nrow(), 
+                      Stock_Daily_Data %>% filter(REACH_DOWN_THRESHOLD) %>% nrow()), 
+  `Obs. Reach Limit` = c(Stock_Daily_Data %>% filter(REACH_UP_LIMIT | REACH_DOWN_LIMIT) %>% nrow(), 
+                         Stock_Daily_Data %>% filter(REACH_UP_LIMIT) %>% nrow(), 
+                         Stock_Daily_Data %>% filter(REACH_DOWN_LIMIT) %>% nrow())
+) %>% 
+  mutate(`Prob. Reach 9%` = `Obs. Reach 9%` / `Obs. All`, 
+         `Prob. Reach Limit` = `Obs. Reach Limit` / `Obs. All`, 
+         `Con. Prob. Reach Limit` = `Prob. Reach Limit` / `Prob. Reach 9%`) %>% 
+  mutate_at(vars(`Prob. Reach 9%`:`Con. Prob. Reach Limit`), formattable::percent, digits = 1L)
+
+basic_count %>% 
+  kable(format.args = list(big.mark = ","), 
+        booktabs = TRUE) %>% 
+  kable_styling(latex_options = "scale_down")
+```
+
+
+# Data and methodology
+
+## methodology
+
+Stock price movement is commonly presumed to follow a geometric Brownian motion (GBM). Let $S$ be the stock price at time $t$, it's disrete time form is 
+$$\frac{\Delta S}{S} = \mu \Delta t + \sigma \epsilon \sqrt{\Delta t}$$
+or 
+$$\Delta S = \mu S\Delta t + \sigma S \epsilon \sqrt{\Delta t}$$
+Variable $\Delta S$ is the stock price change after a short time period $\Delta t$. $\epsilon$ follows a starndart normal distribution, whose expectaion is 0 and variance is 1. Parameter $\mu$ is the expected return of the stock in unit time while parameter $\sigma$ is the volatility rate of the stock, both of which are assumed to be constants.
+The equation indicates that $\Delta S / S$ follows a normal distribution whose expection is $\mu \Delta t$ and standard deviation is $\sigma \sqrt{\Delta t}$. That is 
+$$\frac{\Delta S}{S} \sim \phi(\mu \Delta t, \sigma^2 \Delta t)$$
+When $t \to 0$, we get the continuous time form
+$$\frac{dS}{S} = \mu dt + \sigma dz$$
+or
+$$dS = \mu Sdt + \sigma Sdz$$
+where $z$ is Brownian motion.
+
+## A MCMC approach
+The Monte Carlo simulatin of a stochastic process is a precedure to cast repititive random sampling of the process. The simulation process involves two parameters $\mu$ and $\sigma$. We estimate the parameters with historical stock price data. We use a 120 day rolling window for estimating the parameters of the day. Then we cast MCMC simulation.
+
+### Diagram
+
+
+# Baseline results
+
+```{r}
+base_up <- Stock_Daily_Data4_UP %>% 
+  summarise(REACH_LIMIT_mean = mean(REACH_UP_LIMIT), 
+            PROB_REACH_LIMIT_mean = mean(PROB_REACH_UP_LIMIT, na.rm = TRUE), 
+            diff = REACH_LIMIT_mean - PROB_REACH_LIMIT_mean, 
+            p.value = t.test(REACH_UP_LIMIT, PROB_REACH_UP_LIMIT)$p.value)
+base_down <- Stock_Daily_Data4_DOWN %>% 
+  summarise(REACH_LIMIT_mean = mean(REACH_DOWN_LIMIT), 
+            PROB_REACH_LIMIT_mean = mean(PROB_REACH_DOWN_LIMIT, na.rm = TRUE), 
+            diff = REACH_LIMIT_mean - PROB_REACH_LIMIT_mean, 
+            p.value = t.test(REACH_DOWN_LIMIT, PROB_REACH_DOWN_LIMIT)$p.value)
+bind_rows(base_up, base_down) %>% 
+  mutate_at(vars(REACH_LIMIT_mean:diff), formattable::percent, digits = 1L) %>% 
+  kable(booktabs = TRUE) %>% 
+  kable_styling(position = "center")
+```
+
+
+
+
+## Robustness: daily v.s. intraday estimate
+
+
+# Hard-to-Value Firms
+
+
+# Investor Sentiment
 
 
