@@ -6,7 +6,8 @@ library(cnquant)
 
 # Initialize ----
 # 到基础股票数据的路径
-path_to_basic <- "~/Documents/Stock-Data"
+# path_to_basic <- "~/Documents/Stock-Data"
+path_to_basic <- "~/einzbern/Stock-Data"
 # 读取基础股票数据
 load(paste0(path_to_basic, "/D-Stock-Daily-Data.RData"))
 
@@ -15,14 +16,17 @@ start_date <- "20141010"  # Tick数据开始的时间
 end_date <- "20180330"  # Tick数据结束的时间
 
 # 并行运算使用核心数量
-ncl <- 3L
+ncl <- 20L
 socket_type <- "PSOCK"
 
 # 使用哪些板的股票
-board_codes <- c("000", "001", "600", "601", "603")
-# 注意现在只使用了主板数据
-# 到主板数据的路径
-path_to_mainboard <- "/mnt/sdc2/WIND_DATA/ID_BT_SHARES_A"
+# board_codes <- c("000", "001", "600", "601", "603")  # only主板
+board_codes <- c("000", "001", "600", "601", "603", "002", "300")  # 全部
+# 分别到主板和中小创业板数据的路径
+# path_to_mainboard <- "/mnt/sdc2/WIND_DATA/ID_BT_SHARES_A"
+path_to_mainboard <- "G:/WIND_DATA/ID_BT_SHARES_A"
+path_to_sme <- "H:/WIND_DATA/ID_BT_SHARES_S"
+path_to_ge <- "H:/WIND_DATA/ID_BT_SHARES_G"
 
 # 涨跌幅阈值
 threshold <- 0.09
@@ -104,7 +108,11 @@ Stock_Daily_Data1 <- Stock_Daily_Data %>%
     substr(S_INFO_WINDCODE, 1L, 3L) %in% c("000", "001") ~ 
       paste0(path_to_mainboard, "/KLine/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
     substr(S_INFO_WINDCODE, 1L, 3L) %in% c("600", "601", "603") ~ 
-      paste0(path_to_mainboard, "/KLine/SH/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv")
+      paste0(path_to_mainboard, "/KLine/SH/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
+    substr(S_INFO_WINDCODE, 1L, 3L) %in% c("002") ~ 
+      paste0(path_to_sme, "/KLine/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
+    substr(S_INFO_WINDCODE, 1L, 3L) %in% c("300") ~ 
+      paste0(path_to_ge, "/KLine/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv")
   )) %>% 
   # 类似的也可以用前一天的高频数据估计试试，生成前一天的路径，因为要lag日期，所以放在filter之前
   group_by(S_INFO_WINDCODE) %>% 
@@ -166,7 +174,11 @@ Stock_Daily_Data2 <- Stock_Daily_Data2 %>%
     substr(S_INFO_WINDCODE, 1L, 3L) %in% c("000", "001") ~ 
       paste0(path_to_mainboard, "/Tick/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
     substr(S_INFO_WINDCODE, 1L, 3L) %in% c("600", "601", "603") ~ 
-      paste0(path_to_mainboard, "/Tick/SH/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv")
+      paste0(path_to_mainboard, "/Tick/SH/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
+    substr(S_INFO_WINDCODE, 1L, 3L) %in% c("002") ~ 
+      paste0(path_to_sme, "/Tick/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
+    substr(S_INFO_WINDCODE, 1L, 3L) %in% c("300") ~ 
+      paste0(path_to_ge, "/Tick/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv")
   ))
 
 # 将数据集分割成涨跌两部分
@@ -218,6 +230,8 @@ system.time({
   t1_UP <- parSapply(cl, seq_len(nrow(Stock_Daily_Data2_UP)), match_time_up) %>% t()
   t1_DOWN <- parSapply(cl, seq_len(nrow(Stock_Daily_Data2_DOWN)), match_time_down) %>% t()
 })
+
+save.image("data/01-D-Time-Matched.RData")
 
 
 # MCMC涨停概率 ----
