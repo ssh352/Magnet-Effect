@@ -135,8 +135,8 @@ Stock_Daily_Data2 <- Stock_Daily_Data1 %>%
   # 只需保留过阈值的交易日
   filter(REACH_UP_THRESHOLD | REACH_DOWN_THRESHOLD) %>% 
   # 对涨跌分别去掉开盘时就超过阈值的
-  filter(!(S_DQ_OPEN >= UP_THRESHOLD & S_DQ_LOW > DOWN_THRESHOLD), 
-         !(S_DQ_OPEN <= DOWN_THRESHOLD & S_DQ_HIGH < UP_THRESHOLD))
+  filter(!(S_DQ_OPEN == UP_LIMIT & S_DQ_LOW > DOWN_THRESHOLD), 
+         !(S_DQ_OPEN == DOWN_LIMIT & S_DQ_HIGH < UP_THRESHOLD))
 
 
 # 日内数据估计每日的参数mu和sigma（an alternative way） ----
@@ -182,34 +182,38 @@ Stock_Daily_Data2 <- Stock_Daily_Data2 %>%
   ))
 
 # 将数据集分割成涨跌两部分
-Stock_Daily_Data2_UP <- filter(Stock_Daily_Data2, REACH_UP_THRESHOLD)
-Stock_Daily_Data2_DOWN <- filter(Stock_Daily_Data2, REACH_DOWN_THRESHOLD)
+Stock_Daily_Data3 <- list(
+  UP = filter(Stock_Daily_Data2, REACH_UP_THRESHOLD), 
+  DOWN = filter(Stock_Daily_Data2, REACH_DOWN_THRESHOLD)
+)
 
 # 生成阈值序列
-Thresholds_UP <- sapply(thresholds, 
-                     function(threshold) 
-                       as.integer(Stock_Daily_Data2_UP$S_DQ_PRECLOSE * (1 + threshold) * 10000))
-Thresholds_DOWN <- sapply(-thresholds, 
-                          function(threshold) 
-                            as.integer(Stock_Daily_Data2_DOWN$S_DQ_PRECLOSE * (1 + threshold) * 10000))
+Thresholds <- list(
+  UP = sapply(thresholds, 
+              function(threshold) 
+                as.integer(Stock_Daily_Data3$UP$S_DQ_PRECLOSE * (1 + threshold) * 10000)), 
+  DOWN = sapply(-thresholds, 
+                function(threshold) 
+                  as.integer(Stock_Daily_Data3$DOWN$S_DQ_PRECLOSE * (1 + threshold) * 10000))
+)
 
 # 从Tick文件中匹配超过阈值的时间点的函数
 # 输入为index，输出为integer vector
 match_time_up <- function(index) {
   tryCatch({
-    Stock_Daily_Data2_UP$tick_path[index] %>% 
+    Stock_Daily_Data3$UP$tick_path[index] %>% 
       read_csv(col_types = cols_only(time = col_integer(), 
                                      high = col_integer())) %>% 
-      with(time[sapply(Thresholds_UP[index, ], function(threshold) detect_index(high, ~ . >= threshold)) %>% replace_certain(0L, NA_integer_)])
-  }, error = function(e) rep(NA_integer_, ncol(Thresholds_UP)))
+      with(time[sapply(Thresholds$UP[index, ], function(threshold) detect_index(high, ~ . >= threshold)) %>% replace_certain(0L, NA_integer_)])
+  }, error = function(e) rep.int(NA_integer_, length(thresholds)))
 }
 match_time_down <- function(index) {
   tryCatch({
-    Stock_Daily_Data2_DOWN$tick_path[index] %>% 
+    Stock_Daily_Data3$DOWN$tick_path[index] %>% 
       read_csv(col_types = cols_only(time = col_integer(), 
                                      low = col_integer())) %>% 
-      with(time[sapply(Thresholds_DOWN[index, ], function(threshold) detect_index(low, ~ . > 0 & . <= threshold)) %>% replace_certain(0L, NA_integer_)])
-  }, error = function(e) rep(NA_integer_, ncol(Thresholds_DOWN)))
+      with(time[sapply(Thresholds$DOWN[index, ], function(threshold) detect_index(low, ~ . > 0 & . <= threshold)) %>% replace_certain(0L, NA_integer_)])
+  }, error = function(e) rep.int(NA_integer_, length(thresholds)))
 }
 
 # start cluster
@@ -219,16 +223,16 @@ clusterEvalQ(cl, {
   library(cnquant)
 })
 clusterExport(cl, c(
-  "Stock_Daily_Data2_UP", 
-  "Stock_Daily_Data2_DOWN", 
-  "Thresholds_UP", 
-  "Thresholds_DOWN"
+  "Stock_Daily_Data3", 
+  "Thresholds"
 ))
 
 # 主要计算，匹配时间，返回值为integer matrix
 system.time({
-  t1_UP <- parSapply(cl, seq_len(nrow(Stock_Daily_Data2_UP)), match_time_up) %>% t()
-  t1_DOWN <- parSapply(cl, seq_len(nrow(Stock_Daily_Data2_DOWN)), match_time_down) %>% t()
+  t1 <- list(
+    UP = parSapply(cl, seq_len(nrow(Stock_Daily_Data3$UP)), match_time_up) %>% t(), 
+    DOWN = parSapply(cl, seq_len(nrow(Stock_Daily_Data3$DOWN)), match_time_down) %>% t()
+  )
 })
 
 save.image("data/01-D-Time-Matched.RData")
@@ -244,8 +248,8 @@ ticktime2second <- function(ticktime) {
   return(ticktime)
 }
 
-# 时间变为单位秒，并且变为将2个合并为list
-t1 <- list(UP = t1_UP, DOWN = t1_DOWN) %>% 
+# 时间变为单位秒
+t1 <- t1 %>% 
   lapply(function(x) apply(x, 2, ticktime2second))
 # 由t1推出T
 T <- t1 %>% 
@@ -254,10 +258,12 @@ T <- t1 %>%
 N <- t1 %>% 
   lapply(function(x) round((14400L - x) / 3))
 # Thresholds_Mod，每个threshold到涨跌停的增长比例
-Thresholds_UP_Mod <- Thresholds_UP %>% 
-  apply(2, function(x) Stock_Daily_Data2_UP$UP_LIMIT * 10000 / x)
-Thresholds_DOWN_Mod <- Thresholds_DOWN %>% 
-  apply(2, function(x) Stock_Daily_Data2_DOWN$DOWN_LIMIT * 10000 / x)
+Thresholds_Mod <- list(
+  UP = Thresholds$UP %>% 
+    apply(2, function(x) Stock_Daily_Data3$UP$UP_LIMIT * 10000 / x), 
+  DOWN = Thresholds$DOWN %>% 
+    apply(2, function(x) Stock_Daily_Data3$DOWN$DOWN_LIMIT * 10000 / x)
+)
 
 # 计算触及涨停板概率的函数
 prob_reach_up <- function(index) {
@@ -265,48 +271,49 @@ prob_reach_up <- function(index) {
     trajectories <- Sim.DiffProc::GBM(N = N$UP[index, 1], 
                                       M = 1000, 
                                       T = T$UP[index, 1], 
-                                      theta = Stock_Daily_Data2_UP$mu[index], 
-                                      sigma = Stock_Daily_Data2_UP$sigma[index])
-    probs <- rep.int(NA, ncol(T$UP))
+                                      theta = Stock_Daily_Data3$UP$mu[index], 
+                                      sigma = Stock_Daily_Data3$UP$sigma[index])
+    probs <- rep.int(NA, length(thresholds))
     for (i in seq_along(probs)) {
       probs[i] <- trajectories[time(trajectories) <= T$UP[index, i], ] %>% 
         apply(2, max) %>% 
-        {mean(. >= Thresholds_UP_Mod[index, i])}
+        {mean(. >= Thresholds_Mod$UP[index, i])}
     }
     probs
-  }, error = function(e) rep.int(NA, ncol(T$UP)))
+  }, error = function(e) rep.int(NA, length(thresholds)))
 }
 prob_reach_down <- function(index) {
   tryCatch({
     trajectories <- Sim.DiffProc::GBM(N = N$DOWN[index, 1], 
                                       M = 1000, 
                                       T = T$DOWN[index, 1], 
-                                      theta = Stock_Daily_Data2_DOWN$mu[index], 
-                                      sigma = Stock_Daily_Data2_DOWN$sigma[index])
-    probs <- rep.int(NA, ncol(T$DOWN))
+                                      theta = Stock_Daily_Data3$DOWN$mu[index], 
+                                      sigma = Stock_Daily_Data3$DOWN$sigma[index])
+    probs <- rep.int(NA, length(thresholds))
     for (i in seq_along(probs)) {
       probs[i] <- trajectories[time(trajectories) <= T$DOWN[index, i], ] %>% 
         apply(2, min) %>% 
-        {mean(. <= Thresholds_DOWN_Mod[index, i])}
+        {mean(. <= Thresholds_Mod$DOWN[index, i])}
     }
     probs
-  }, error = function(e) rep.int(NA, ncol(T$DOWN)))
+  }, error = function(e) rep.int(NA, length(thresholds)))
 }
 
 # clusterExport
 clusterExport(cl, c(
   "N", 
   "T", 
-  "Thresholds_UP_Mod", 
-  "Thresholds_DOWN_Mod"
+  "Thresholds_Mod"
 ))
 
 set.seed(4L)
 
 # 主要计算，达到各个threshold后达到涨跌停的概率，返回值为numeric matrix
 system.time({
-  Probs_UP <- parSapply(cl, seq_len(nrow(Stock_Daily_Data2_UP)), prob_reach_up) %>% t()
-  Probs_DOWN <- parSapply(cl, seq_len(nrow(Stock_Daily_Data2_DOWN)), prob_reach_down) %>% t()
+  Probs_Theo <- list(
+    UP = parSapply(cl, seq_len(nrow(Stock_Daily_Data3$UP)), prob_reach_up) %>% t(), 
+    DOWN = parSapply(cl, seq_len(nrow(Stock_Daily_Data3$DOWN)), prob_reach_down) %>% t()
+  )
 })
 
 # 结束并行cluster
@@ -324,8 +331,8 @@ Stock_Daily_Data1 %>%
 
 
 # 理论概率与真实概率 ----
-Stock_Daily_Data2_UP %>% 
+Stock_Daily_Data3$UP %>% 
   summarise(REACH_UP_LIMIT_mean = mean(REACH_UP_LIMIT), 
-            PROB_REACH_UP_LIMIT_mean = mean(Probs_UP[, 1], na.rm = TRUE), 
+            PROB_REACH_UP_LIMIT_mean = mean(Probs_Theo$UP[, 1], na.rm = TRUE), 
             REACH_UP_diff = REACH_UP_LIMIT_mean - PROB_REACH_UP_LIMIT_mean, 
-            REACH_UP_p.value = t.test(REACH_UP_LIMIT, Probs_UP[, 1], paired = TRUE)$p.value)
+            REACH_UP_p.value = t.test(REACH_UP_LIMIT, Probs_Theo$UP[, 1], paired = TRUE)$p.value)
