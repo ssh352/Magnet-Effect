@@ -224,7 +224,8 @@ clusterEvalQ(cl, {
 })
 clusterExport(cl, c(
   "Stock_Daily_Data3", 
-  "Thresholds"
+  "Thresholds", 
+  "thresholds"
 ))
 
 # 主要计算，匹配时间，返回值为integer matrix
