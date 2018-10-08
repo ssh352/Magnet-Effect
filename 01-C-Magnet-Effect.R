@@ -58,7 +58,7 @@ Stock_Daily_Data <- Stock_Daily_Data %>%
   # 需要的变量
   select(S_INFO_WINDCODE:S_DQ_CLOSE, S_DQ_PCTCHANGE, S_DQ_TRADESTATUS, UP_DOWN_LIMIT_STATUS, ST) %>% 
   # 样本期，因为需要滚动窗口，这里比Tick样本期间多取6个月
-  filter(TRADE_DT >= format(start_date %>% ymd() %m-% months(6), "%Y%m%d")) %>% 
+  filter(TRADE_DT >= format(start_date %>% ymd() %m-% months(13), "%Y%m%d")) %>% 
   # 使用哪些板的股票
   filter(substr(S_INFO_WINDCODE, 1L, 3L) %in% board_codes)
 
@@ -89,11 +89,11 @@ Stock_Daily_Data <- Stock_Daily_Data %>%
   group_by(S_INFO_WINDCODE) %>% 
   do(data.frame(
     ., 
-    rollapply(.$Ri, 120, mu_sigma, fill = NA), 
+    rollapply(.$Ri, list(-260:-21), mu_sigma, fill = NA), 
     stringsAsFactors = FALSE
   )) %>% 
   ungroup() %>% 
-  select(-Ri, -rollapply...Ri..120..mu_sigma..fill...NA.) %>% 
+  select(-Ri, -starts_with("rollapply")) %>% 
   rename(mu = X1, sigma = X2) %>% 
   mutate(mu = mu + 1 / 2 * sigma ^ 2) %>% 
   # 滚动窗口计算完之后只保留有Tick数据的期间
@@ -102,22 +102,22 @@ Stock_Daily_Data <- Stock_Daily_Data %>%
 )
 
 
-# 添加前一天的Kline数据路径 ----
-Stock_Daily_Data1 <- Stock_Daily_Data %>% 
-  mutate(kline_path_lag1 = case_when(
-    substr(S_INFO_WINDCODE, 1L, 3L) %in% c("000", "001") ~ 
-      paste0(path_to_mainboard, "/KLine/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
-    substr(S_INFO_WINDCODE, 1L, 3L) %in% c("600", "601", "603") ~ 
-      paste0(path_to_mainboard, "/KLine/SH/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
-    substr(S_INFO_WINDCODE, 1L, 3L) %in% c("002") ~ 
-      paste0(path_to_sme, "/KLine/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
-    substr(S_INFO_WINDCODE, 1L, 3L) %in% c("300") ~ 
-      paste0(path_to_ge, "/KLine/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv")
-  )) %>% 
-  # 类似的也可以用前一天的高频数据估计试试，生成前一天的路径，因为要lag日期，所以放在filter之前
-  group_by(S_INFO_WINDCODE) %>% 
-  mutate(kline_path_lag1 = lag(kline_path_lag1)) %>% 
-  ungroup()
+# # 添加前一天的Kline数据路径 ----
+# Stock_Daily_Data1 <- Stock_Daily_Data %>% 
+#   mutate(kline_path_lag1 = case_when(
+#     substr(S_INFO_WINDCODE, 1L, 3L) %in% c("000", "001") ~ 
+#       paste0(path_to_mainboard, "/KLine/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
+#     substr(S_INFO_WINDCODE, 1L, 3L) %in% c("600", "601", "603") ~ 
+#       paste0(path_to_mainboard, "/KLine/SH/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
+#     substr(S_INFO_WINDCODE, 1L, 3L) %in% c("002") ~ 
+#       paste0(path_to_sme, "/KLine/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv"), 
+#     substr(S_INFO_WINDCODE, 1L, 3L) %in% c("300") ~ 
+#       paste0(path_to_ge, "/KLine/SZ/", TRADE_DT, "/", substr(S_INFO_WINDCODE, 1L, 6L), ".csv")
+#   )) %>% 
+#   # 类似的也可以用前一天的高频数据估计试试，生成前一天的路径，因为要lag日期，所以放在filter之前
+#   group_by(S_INFO_WINDCODE) %>% 
+#   mutate(kline_path_lag1 = lag(kline_path_lag1)) %>% 
+#   ungroup()
 
 
 # 二筛样本，非ST等破坏个股连续时间样本的要求 ----
@@ -139,30 +139,30 @@ Stock_Daily_Data2 <- Stock_Daily_Data1 %>%
          !(S_DQ_OPEN == DOWN_LIMIT & S_DQ_HIGH < UP_THRESHOLD))
 
 
-# 日内数据估计每日的参数mu和sigma（an alternative way） ----
-# 从日内Kline数据估计每日的参数mu和sigma的函数
-mu_sigma_intraday <- function(path) {
-  # path为日内数据文件路径
-  tryCatch({
-    path %>% 
-      read_csv(col_types = cols_only(close = col_integer())) %>% 
-      with(mu_sigma(log(close / lag(close))))
-  }, error = function(e) c(NA, NA))
-}
-
-system.time(
-Stock_Daily_Data2 <- Stock_Daily_Data2 %>% 
-  # 计算
-  data.frame(
-    t(sapply(.$kline_path_lag1, mu_sigma_intraday, USE.NAMES = FALSE)), 
-    stringsAsFactors = FALSE
-  ) %>% 
-  as_tibble() %>% 
-  select(-kline_path_lag1) %>% 
-  rename(mu_hf = X1, sigma_hf = X2) %>% 
-  mutate(sigma_hf = sigma_hf * sqrt(240), 
-         mu_hf = mu_hf * 240 + 1 / 2 * sigma_hf ^ 2)
-)
+# # 日内数据估计每日的参数mu和sigma（an alternative way） ----
+# # 从日内Kline数据估计每日的参数mu和sigma的函数
+# mu_sigma_intraday <- function(path) {
+#   # path为日内数据文件路径
+#   tryCatch({
+#     path %>% 
+#       read_csv(col_types = cols_only(close = col_integer())) %>% 
+#       with(mu_sigma(log(close / lag(close))))
+#   }, error = function(e) c(NA, NA))
+# }
+# 
+# system.time(
+# Stock_Daily_Data2 <- Stock_Daily_Data2 %>% 
+#   # 计算
+#   data.frame(
+#     t(sapply(.$kline_path_lag1, mu_sigma_intraday, USE.NAMES = FALSE)), 
+#     stringsAsFactors = FALSE
+#   ) %>% 
+#   as_tibble() %>% 
+#   select(-kline_path_lag1) %>% 
+#   rename(mu_hf = X1, sigma_hf = X2) %>% 
+#   mutate(sigma_hf = sigma_hf * sqrt(240), 
+#          mu_hf = mu_hf * 240 + 1 / 2 * sigma_hf ^ 2)
+# )
 
 
 # Tick数据确定涨跌超过阈值时间点 ----
