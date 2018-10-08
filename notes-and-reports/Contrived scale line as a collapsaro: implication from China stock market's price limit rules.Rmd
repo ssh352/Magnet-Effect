@@ -30,7 +30,14 @@ theme_set(
 )
 ```
 
-# Background
+# Introduction
+
+In am ideal frictinoles stock market, stock price walks randomly. Actually, howerver, does any price really makes the same sense in terms of probability? For instance, a round number may impress people more than a none-round number, thus \$100 other than \$94.56 may makes a difference psychologically to a investor. The question comes that will this difference affect the price trend practically? In China's stock market, the two exchanges, Shanghai Stock Exchange (SSE) and the Shenzhen Stock Exchange (SZSE), restrict the daily absolute movement of a stock price to 10% of the previous trading day’s closing price for most of their listed stocks, thus the upper and lower price limit equivalent to 10% and -10%[^1] may make special to investors, which has provided fantastic source material to test the effect of contrived price scale line.
+
+[^1]: Actully because the minimum tick size for stocks is RMB one cent. Therefore, in cases where a 10% price change is not an integral number of cents, the daily price limit is rounded to the nearest cent.
+
+Thus, we focus on extreme stock price movements that approach the upper or lower limit. The
+
 
 Distribution of maximum and minimum daily price percent change
 

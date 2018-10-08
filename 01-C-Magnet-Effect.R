@@ -118,6 +118,7 @@ Stock_Daily_Data <- Stock_Daily_Data %>%
 #   group_by(S_INFO_WINDCODE) %>% 
 #   mutate(kline_path_lag1 = lag(kline_path_lag1)) %>% 
 #   ungroup()
+Stock_Daily_Data1 <- Stock_Daily_Data
 
 
 # 二筛样本，非ST等破坏个股连续时间样本的要求 ----
