@@ -13,7 +13,7 @@ load(paste0(path_to_basic, "/D-Stock-Daily-Data.RData"))
 
 # 最终样本期间为对应有Tick数据的时间
 start_date <- "20141010"  # Tick数据开始的时间
-end_date <- "20180330"  # Tick数据结束的时间
+end_date <- "20181010"  # Tick数据结束的时间
 
 # 并行运算使用核心数量
 ncl <- 20L
@@ -56,9 +56,11 @@ thresholds <- seq(0.09, 0.099, by = 0.001)
 # 初筛样本，需要的变量和时间区间 ----
 Stock_Daily_Data <- Stock_Daily_Data %>% 
   # 需要的变量
-  select(S_INFO_WINDCODE:S_DQ_CLOSE, S_DQ_PCTCHANGE, S_DQ_TRADESTATUS, UP_DOWN_LIMIT_STATUS, ST) %>% 
+  select(S_INFO_WINDCODE:S_DQ_CLOSE, S_DQ_PCTCHANGE, S_DQ_TRADESTATUS, 
+         UP_DOWN_LIMIT_STATUS, ST) %>% 
   # 样本期，因为需要滚动窗口，这里比Tick样本期间多取6个月
   filter(TRADE_DT >= format(start_date %>% ymd() %m-% months(13), "%Y%m%d")) %>% 
+  filter(TRADE_DT <= end_date) %>% 
   # 使用哪些板的股票
   filter(substr(S_INFO_WINDCODE, 1L, 3L) %in% board_codes)
 
@@ -97,8 +99,7 @@ Stock_Daily_Data <- Stock_Daily_Data %>%
   rename(mu = X1, sigma = X2) %>% 
   mutate(mu = mu + 1 / 2 * sigma ^ 2) %>% 
   # 滚动窗口计算完之后只保留有Tick数据的期间
-  filter(TRADE_DT >= start_date) %>% 
-  filter(TRADE_DT <= end_date)
+  filter(TRADE_DT >= start_date)
 )
 
 
@@ -237,8 +238,6 @@ system.time({
   )
 })
 
-save.image("data/01-D-Time-Matched.RData")
-
 
 # MCMC涨停概率 ----
 # tick时间映射到[0, 14400s]的函数
@@ -321,20 +320,5 @@ system.time({
 # 结束并行cluster
 stopCluster(cl)
 
+# 保存数据
 save.image("data/01-D-Sequential-Data.RData")
-
-
-# 描述性统计 ----
-# 日最大收益率的分布
-Stock_Daily_Data1 %>% 
-  mutate(HIGH_PCTCHANGE = S_DQ_HIGH / S_DQ_PRECLOSE - 1) %>% 
-  ggplot(aes(x = HIGH_PCTCHANGE)) + 
-  geom_histogram(binwidth = 0.0001)
-
-
-# 理论概率与真实概率 ----
-Stock_Daily_Data3$UP %>% 
-  summarise(REACH_UP_LIMIT_mean = mean(REACH_UP_LIMIT), 
-            PROB_REACH_UP_LIMIT_mean = mean(Probs_Theo$UP[, 1], na.rm = TRUE), 
-            REACH_UP_diff = REACH_UP_LIMIT_mean - PROB_REACH_UP_LIMIT_mean, 
-            REACH_UP_p.value = t.test(REACH_UP_LIMIT, Probs_Theo$UP[, 1], paired = TRUE)$p.value)
