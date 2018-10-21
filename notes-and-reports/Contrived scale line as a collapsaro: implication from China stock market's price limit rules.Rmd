@@ -1,26 +1,43 @@
 ---
-title: 'Contrived scale line as a collapsaro: evidence from China stock market''s
-  price limit rules'
+title: "Contrived Price Line as A Collapsaro: Evidence from China Stock Market's
+  Price Limit Rules"
+abstract: We verify the magnet effect of contrived scale line of stock price 
+  based on prospective of probabilities with upper and lower price limit in 
+  China's stock market. We find that magnet effect is stronger for 
+  harder-to-value firms and more avtive-trading firms. We show that a stimulus 
+  is necessay to trigger the magnet effect. Future liquidity concerns of 
+  institutional investors may be the driving factor behind the scene.
 output: 
   pdf_document:
     dev: cairo_pdf
+    number_sections: yes
+    latex_engine: xelatex
+fontsize: 12pt
+bibliography: references.bib
+# header-includes:
+# - \usepackage[fontsize=15pt]{scrextend}
 ---
 
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(lubridate)
-library(scales)
+library(zoo)
 library(cnquant)
 library(knitr)
 library(kableExtra)
-load("../data/01-D-First-Complete-Data.RData")
-options(knitr.kable.NA = "-")
+library(formattable)
+library(scales)
+library(stargazer)
+load("../data/02-D-For-Rmd-Paper.RData")
+options(digits = 2L, 
+        scipen = 99, 
+        knitr.kable.NA = "-")
 knitr::opts_chunk$set(echo = FALSE, fig.align = "center")
 theme_set(
-  theme_minimal(base_size = 11, base_family = "STSong") + 
+  theme_minimal(base_size = 11) + 
     theme(
-      legend.position = c(1, 1), 
-      legend.justification = c(1, 1), 
+      # legend.position = c(1, 1), 
+      # legend.justification = c(1, 1), 
       legend.spacing = unit(8, "pt"), 
       legend.box = "horizontal", 
       legend.title = element_text(size = 10), 
@@ -28,72 +45,132 @@ theme_set(
       legend.background = element_rect(fill = "white", colour = FALSE)
     )
 )
+Sys.setlocale("LC_TIME", "en_US.UTF-8")
+start_date <- start_date %>% ymd() %>% format("%b %d %Y")
+end_date <- end_date %>% ymd() %>% format("%b %d %Y")
 ```
+
 
 # Introduction
 
-In am ideal frictinoles stock market, stock price walks randomly. Actually, howerver, does any price really makes the same sense in terms of probability? For instance, a round number may impress people more than a none-round number, thus \$100 other than \$94.56 may makes a difference psychologically to a investor. The question comes that will this difference affect the price trend practically? In China's stock market, the two exchanges, Shanghai Stock Exchange (SSE) and the Shenzhen Stock Exchange (SZSE), restrict the daily absolute movement of a stock price to 10% of the previous trading day’s closing price for most of their listed stocks, thus the upper and lower price limit equivalent to 10% and -10%[^1] may make special to investors, which has provided fantastic source material to test the effect of contrived price scale line.
+In an ideal frictionless stock market, stock price walks randomly. The probability to go to another price depends on how far away that price is from the current one. The farther, the less likely, while it does no matter what the exact price is. Howerver, do different prices really make the same sense in terms of other than probability, given the truth that people may pay more attention to some particular price line like rounding numbers or other contrived ones? For example, \$100 relative to \$94.56 may indeed means something different to investors. The question comes that will this difference affect the price trend practically? In China's stock market, the two exchanges, Shanghai Stock Exchange (SSE) and the Shenzhen Stock Exchange (SZSE), restrict the daily absolute movement of a stock price to 10% of the previous trading day’s closing price for most of their listed stocks, thus the upper and lower price limit equivalent to 10% and -10%[^1] may make special to investors, which has provided fantastic source material to test the effect of contrived price scale line.
 
 [^1]: Actully because the minimum tick size for stocks is RMB one cent. Therefore, in cases where a 10% price change is not an integral number of cents, the daily price limit is rounded to the nearest cent.
 
-Thus, we focus on extreme stock price movements that approach the upper or lower limit. The
+While much attention has been paid on the distribution on stock returns, seldom has been paid to the maximum ones. The top two subfigures of Figure \ref{fig:extreme_dist} displays the daily maximum and minimum returns distribution all stocks listed within China. The distributions come nothing than a common normal or student-t distribution, but have unusual multimodal forms. For the maximum side, for example, first, a descent proportion stays right at the zero point for stocks not having any price change during the day. Second, there are two peak not far away from the zero point at positive and negative respectly. Last but not least, a huge numbern of points accumulate at arround the 10% change. When we zoom in at here (the bottom subfigures), we even see an incremental trend towards the 10% scale line, which can be surprising given the truth that the previous trend decays.
 
+We will focus on these extreme stock price movements that approach the upper or lower limit through this paper.
 
-Distribution of maximum and minimum daily price percent change
-
-```{r high_pctchange_dist, message=FALSE}
-# 日最大收益率的分布
-p1 <- Stock_Daily_Data0 %>% 
-  mutate(HIGH_PCTCHANGE = S_DQ_HIGH / S_DQ_PRECLOSE - 1) %>% 
-  ggplot(aes(x = HIGH_PCTCHANGE)) +
-  geom_histogram(binwidth = 0.0001) + 
-  scale_x_continuous(labels = percent) + 
-  coord_cartesian(ylim = c(0, 5000)) + 
-  labs(x = "Maximum price percent change in the day", 
-       y = "Count")
-p1_zoom <- p1 + 
-  coord_cartesian(xlim = c(0.08, 0.1), ylim = c(0, 5000))
-
-p2 <- Stock_Daily_Data0 %>% 
-  mutate(LOW_PCTCHANGE = S_DQ_LOW / S_DQ_PRECLOSE - 1) %>% 
-  ggplot(aes(x = LOW_PCTCHANGE)) +
-  geom_histogram(binwidth = 0.0001) + 
-  scale_x_continuous(labels = percent) + 
-  coord_cartesian(ylim = c(0, 5000)) + 
-  labs(x = "Minimum price percent change in the day", 
-       y = "Count")
-p2_zoom <- p2 + 
-  coord_cartesian(xlim = c(-0.1, -0.08), ylim = c(0, 5000))
-
-Rmisc::multiplot(p1, p1_zoom, p2, p2_zoom, cols = 2)
+```{r extreme_dist, fig.pos="H", fig.cap="Distribution of Maximum and Minimum Daily Price Percent Changes"}
+Rmisc::multiplot(p_Max_Dist, p_Max_Dist_Zoom, p_Min_Dist, p_Min_Dist_Zoom, cols = 2L)
 ```
 
-```{r}
-basic_count <- tibble(
-  Type = c("All", "Upper", "Lower"), 
-  `Obs. All` = nrow(Stock_Daily_Data0), 
-  `Obs. Reach 9%` = c(Stock_Daily_Data %>% nrow(), 
-                      Stock_Daily_Data %>% filter(REACH_UP_THRESHOLD) %>% nrow(), 
-                      Stock_Daily_Data %>% filter(REACH_DOWN_THRESHOLD) %>% nrow()), 
-  `Obs. Reach Limit` = c(Stock_Daily_Data %>% filter(REACH_UP_LIMIT | REACH_DOWN_LIMIT) %>% nrow(), 
-                         Stock_Daily_Data %>% filter(REACH_UP_LIMIT) %>% nrow(), 
-                         Stock_Daily_Data %>% filter(REACH_DOWN_LIMIT) %>% nrow())
-) %>% 
-  mutate(`Prob. Reach 9%` = `Obs. Reach 9%` / `Obs. All`, 
-         `Prob. Reach Limit` = `Obs. Reach Limit` / `Obs. All`, 
-         `Con. Prob. Reach Limit` = `Prob. Reach Limit` / `Prob. Reach 9%`) %>% 
-  mutate_at(vars(`Prob. Reach 9%`:`Con. Prob. Reach Limit`), formattable::percent, digits = 1L)
+There are `r Extreme_Prop[1, 3]` out of `r Extreme_Prop[1, 2]` stock-day observations having reached a 9% price change with a probability of `r Extreme_Prop[1, 5]`, and `r Extreme_Prop[1, 4]` out of `r Extreme_Prop[1, 2]` stock-day observations having reached the 10% price limit with a probability of `r Extreme_Prop[1, 6]`, while the conditional probability is `r Extreme_Prop[1, 7]` (see Table \ref{tab:extreme_prop}). We have excluded obserbations when the open price is at the price limit, because these observations will have no more price movement the whole day. The conditional probability seems to be large, but there's no benchmark for it to be compared from.
 
-basic_count %>% 
-  kable(format.args = list(big.mark = ","), 
+```{r extreme_prop}
+Extreme_Prop %>% 
+  mutate_at(vars(`Prob. Reach 9%`:`Con. Prob. Reach Limit`), 
+            formattable::percent, digits = 1L) %>% 
+  kable(caption = "Number of Observations Reaching 9\\% and 10\\% Price Changes", 
+        format.args = list(big.mark = ","), 
         booktabs = TRUE) %>% 
-  kable_styling(latex_options = "scale_down")
+  kable_styling(latex_options = c("HOLD_position", "scale_down"))
 ```
 
+All these concerns inspired us to verify whether there exists such a "magnet effct" at the price scale lines from the prospective of probabilities.
 
-# Data and methodology
+In order to verify our conjecture, from the perspective of probabilities, that 
+there exists a magnet effect of price limits when stock price goes close to 
+them, we need to compare the practical conditional probability of stock 
+price's reaching the price limit when having achieved some close level, to a 
+theoretical benchmark. It is commonly asssumed that the stock price follows 
+geometric Brownian motion (GBM) [@Black:1973aa]. We adopt the GBM model to the 
+stock price 
+process at the time it crosses the threshold level. Since the stock price is a 
+markov process, we can obtain the probability it will reach the price limit 
+from then on during that day with the stock price's drift rate $\mu$ and 
+volatiliy rate $\sigma$ parameters. We ascertain the pinpoint time when stock 
+price crosses the threshold with intraday tick data and estimate the two 
+necessary model parameters with historical stock prices and returns. The 
+calculation workhorse of theoretial probability whether the stock price is 
+able to reach the price limit is via a Markov Chain Monte Carlo (MCMC) 
+approach.
 
-## methodology
+We calculate the theoretical probability for each stock-day that the stock 
+price has ever reached a percentage change of a close threshold (for example, 
+±9%) respectively for the upper and lower direction. The calculation involves 
+huge intense computation and we believe to be the first one to do such 
+comprehensive work. 
+
+The result shows that there is fairly a huge gap betweent the practical 
+empirical probability and the mean theoretical probability, with the former 
+one sitting upon the latter one, which shows the magnet effect of price limits 
+we state.
+
+We next examine that the magnet effect is greater for harder-to-value firms and 
+those with more active trading activitys. We use a number of different proxies 
+to measure the extent to which a firm’s shares are difficult to value: firm 
+size, price-to-earnings ratio, whether paying dividend and 
+price-to-dividend ratio. Firms that are more smaller, less profitable, and 
+paying no or less dividend are likely to be harder to value. We do a logistic 
+regression on the probability to reach price limit with each hard-to-value 
+measure controling mainly for the theoretical probability. For each measure, 
+as is expected, the magnet effect tends to be significantly stronger for the 
+more-difficult-to-value firm than the less-difficult-to-value firms.
+
+We test for the effect of individual stock trading dynamism on magnet effect by 
+running logistic regressions depending on various measures including trading 
+volume in RMB and turnover ratio. As expected, the magnet effect turns 
+stronger when stock trading dynamism increases. The coefficients are all 
+reliably significant.
+
+Next, we examine whether a stimulus is necessary to trigger the magnet effect. 
+That is, there is a incresing process of the stock price to approach the price 
+limit. We compare sample of those who have got a large overnight return beyond 
+threshold with those whose price crosses the threshold during daylight 
+continuous auctions. The sample without a trigger has got a much higher 
+theoretical probability since the longer time promises a larger volatility 
+arrange. The practical probability comes also a little higher, however, the 
+difference tends to be insignificant. This suggests that a signal during 
+trading is a necessary trigger for the magnet effect.
+
+To gain insight of the emergence of the magnet effect, we state that it may be 
+caused by liqudity concerns especially by institutional invesetors. When stock 
+price reaches price limit, the stock will be no longer tradable (at that 
+direction). For that sake, when it approaches the price limit, institutional 
+investors may trade it in advance to avoid possible future illiquidity. We 
+regress the probability on institutional holding and the result turns out to 
+be that firms with larger institutional holdings have a stronger magnet effect.
+
+The remaining of the paper is structured as follows: section 
+\ref{data-and-methodology} introduce the data we use and methodology we adopt, 
+section \ref{baseline-result} shows the baseline result, section 
+\ref{further-analysis} carries out some further analysis, section 
+\ref{possible-explanation} gives out some possible explanation, and section 
+\ref{conclusion} concludes the paper.
+
+
+# Data and Methodology
+
+## Data
+
+Our primary data source is the Wind financial database which is the most 
+comprehensive and powerful database in China stock market. We include all 
+common shares listed in SSE and SZSE, including all of the mainboard, small 
+and medium enterprise board and growth stock board. Our sample spans from 
+`r start_date` to `r end_date`, for we have only access to high frequentcy 
+stock database during this period. We construct our sample with stock-day that 
+the stock price crosses a certain threshold (for example, ±9%) at that day. We 
+exclude stock-day that the stock is temporally halted from trading or newly 
+listed within 3 months. In addition, there are a special proportion of stocks 
+marked as ST (special treated), which have often met a deficit for consecutive 
+3 years and are facing delisting off board. These special stocks have a 
+special 5% price limit other than normal ones and we exclude them as well.
+
+
+## Methodology
+
+### Geometric Brownian Motion
 
 Stock price movement is commonly presumed to follow a geometric Brownian motion (GBM). Let $S$ be the stock price at time $t$, it's disrete time form is 
 $$\frac{\Delta S}{S} = \mu \Delta t + \sigma \epsilon \sqrt{\Delta t}$$
@@ -108,40 +185,294 @@ or
 $$dS = \mu Sdt + \sigma Sdz$$
 where $z$ is Brownian motion.
 
-## A MCMC approach
-The Monte Carlo simulatin of a stochastic process is a precedure to cast repititive random sampling of the process. The simulation process involves two parameters $\mu$ and $\sigma$. We estimate the parameters with historical stock price data. We use a 120 day rolling window for estimating the parameters of the day. Then we cast MCMC simulation.
+### An MCMC Approach
 
-### Diagram
+To obtain the theoretical probability of stock price's reaching the price 
+limit conditional on having reached some threshold, we first need to ascertain 
+the exact time that stock price crosses the threshold, and then calculate the 
+probability it hit the price limit throughtout the remaining day. For the 
+majority part of our paper, we set the threshold to be ±9% and we also discuss 
+the circumstance of different thresholds. We ascertain the pinpoint time with 
+the precision of three seconds via the intraday tick quotes data. Then we 
+apply the GBM model to the stock price and adopt the MCMC method as workhorse. 
+Specifically, we first estimate the drift rate $\mu$ and volatility rate 
+$\sigma$ with a rolling window of stock's past 1 year's returns. Then we 
+simulate as many as 1000 trajectory paths since the stock price crosses the 
+threshold during the day. We record for each trajectory whether it reaches the 
+price limit, and use the empirial frequency as the estimator of the 
+theoretical probability.
+
+```{r exam_traj, fig.pos="H", fig.cap="Illustration of the MCMC Simulation"}
+p_Exam_Traj
+```
+
+\ref{fig:exam_traj} illustrates the simulation process for one observation. 
+The stock price of PingAn Bank (tick symbol code "000001", listed on SZSE) 
+crosses the +9% threshold of ¥12.33 at 13:13:03 on 
+`r Stock_Daily_Data3$UP$TRADE_DT[1] %>% ymd() %>% format("%b %d %Y")`. The 
+pre-close price is ¥11.31, thus the upper price limit is ¥11.31 * (1 + 10%) 
+equals ¥12.44. We then use the GBM parameters $\mu$ and $\sigma$, estimated 
+with the historical stock prices data before, to simulate 1000 trajectories 
+presumed with no price limit from 13:13:03 on (Figure \ref{fig:exam_traj} 
+displays only 10 trajectories for example for the sake of concisement). The 
+proportion out of all 1000 trajectories that reaches the ¥12.44 upper price 
+limit is recorded to obtain the probability. The probability in 
+\ref{fig:exam_traj} is 20% (2 out of 10) here, while the actuall process 
+involves a simulation of as many as 1000 trajectories for each sample 
+observation which is able to carry out an accurate result.
 
 
-# Baseline results
+# Baseline Result
 
-```{r}
-base_up <- Stock_Daily_Data4_UP %>% 
-  summarise(REACH_LIMIT_mean = mean(REACH_UP_LIMIT), 
-            PROB_REACH_LIMIT_mean = mean(PROB_REACH_UP_LIMIT, na.rm = TRUE), 
-            diff = REACH_LIMIT_mean - PROB_REACH_LIMIT_mean, 
-            p.value = t.test(REACH_UP_LIMIT, PROB_REACH_UP_LIMIT)$p.value)
-base_down <- Stock_Daily_Data4_DOWN %>% 
-  summarise(REACH_LIMIT_mean = mean(REACH_DOWN_LIMIT), 
-            PROB_REACH_LIMIT_mean = mean(PROB_REACH_DOWN_LIMIT, na.rm = TRUE), 
-            diff = REACH_LIMIT_mean - PROB_REACH_LIMIT_mean, 
-            p.value = t.test(REACH_DOWN_LIMIT, PROB_REACH_DOWN_LIMIT)$p.value)
-bind_rows(base_up, base_down) %>% 
-  mutate_at(vars(REACH_LIMIT_mean:diff), formattable::percent, digits = 1L) %>% 
-  kable(booktabs = TRUE) %>% 
-  kable_styling(position = "center")
+Our sample contains all stock-day that the stock price has ever reached an +9% 
+or -9% change. Some observatins has hit the upper or lower price limit 
+iniatially at the market opening, thus have a "---" shape the whole day. We 
+exclude these observations because they have no price variation during the day 
+at all. About 3.9% and 4.1%, respectively, of observations have reached the +9%
+and -9% thresholds. We then exclude observations with missing intraday data 
+couterpart. The final samples have a size of `r Prac_Vs_Theo[2, 7]` for the 
+upper direction, and `r Prac_Vs_Theo[3, 7]` for the lower direction 
+respectively. We also have a aggregated sample consists of both the upper and 
+lower samples.
+
+In Table \ref{tab:prac_vs_theo} we show the simulated mean theoretical 
+probability that the stock price reach the price limit conditional on having 
+reached a 9% threshold, as well as the practical probability that the stock 
+price actually hit the price limit. In the aggregated sample which contains 
+both the two direction samples, the theoretially mean probability is 
+`r Prac_Vs_Theo[1, 3]` while the actuall probability is `r Prac_Vs_Theo[1, 2]`.
+The difference is `r Prac_Vs_Theo[1, 4]` which is significant at the 1% level.
+
+```{r prac_vs_theo}
+Prac_Vs_Theo %>% 
+  mutate_at(vars(`Prac. Prob.`:Diff.), formattable::percent, digits = 1L) %>%
+  kable(caption = "Probability of Reaching Price Limit -- Practically V.S. Theoretically", 
+        digits = 1L, 
+        format.args = list(big.mark = ","), 
+        booktabs = TRUE) %>% 
+  kable_styling(latex_options = "HOLD_position")
+```
+
+When we look at the two directions separately, the upper one has a practical 
+probability of `r Prac_Vs_Theo[2, 2]` and a theoretical probability of 
+`r Prac_Vs_Theo[2, 3]`. The difference is `r Prac_Vs_Theo[2, 4]` significant 
+at 1% level. As for the lower direction, the theoretical probability is 
+`r Prac_Vs_Theo[3, 3]`, much lower than the upper one, but not surprisingly 
+for stock has an almost always positive drift rate $\mu$. However, the 
+practical probability is even more higher than the upper one at 
+`r Prac_Vs_Theo[3, 2]`. This indicates that there is a stronger magnet effect 
+when the stock price goes down to approach the lower price limit than the 
+upper one. 
+
+We then elaborate to thresholds more adjacent to the price limit, from ±9.0% 
+to ±9.9% stepping by 0.1%. As the threshold goes near gradually to the price 
+limit, the samlpe size narrows as well, from 128982 to 96176 for the aggregate 
+sample (Table \ref{tab:valid_thre_count}).
+
+```{r valid_thre_count}
+Valid_Thre_Count %>% 
+  kable(caption = "Number of Observations Reaching Different Thresholds", 
+        format.args = list(big.mark = ","), 
+        booktabs = TRUE) %>% 
+  kable_styling(latex_options = c("HOLD_position", "scale_down"))
+```
+
+The gap between the practical probability and theoretical probability is 
+obvious all the time and, nothing surprising, converges when both probability 
+converge to 100% (See Figure \ref{fig:diff_thre}).
+
+```{r diff_thre, fig.height=8, fig.pos="H", fig.cap="Probability to Reach Price Limit from Incremental Thresholds"}
+p_Diff_Thre
 ```
 
 
+# Further Analysis
 
+We conduct further analysis towards the magnet effect.
 
-## Robustness: daily v.s. intraday estimate
+## Hard-to-Value Firms
 
+Since the price deviates its inherent traces attracted by the price limit, 
+then we should find that the magnet effect is stronger for firms that are 
+harder to value.
 
-# Hard-to-Value Firms
+We use four different measures to proxy for the extent to which a firm is 
+difficult to value: firm size, price-to-earnings ratio, whether paying 
+dividend and price-to-dividend ratio, with smaller firms, firms that are 
+expected to grow more quickly (high price-to-earnings ratio), miser firms 
+(paying no dividend), and lower rate of dividend firms being harder to value. 
+We do a logistic regression on the probability to reach price limit with each 
+hard-to-value measure controling mainly for the theoretical probability. For 
+parsimony, we present results only of the aggregate sample, thus we also 
+control for the direction since there is much difference between them. 
+The logistic regression equation is: 
 
+\begin{equation}\label{eq:hard-to-value}
+\begin{split}
+Prob(Reaching\ Price\ Limit_{i,t}) &= Logistic(\alpha + \beta\cdot Theoretical\ Probability_{i,t} + \\
+&\gamma\cdot Direction_{i,t} + \delta\cdot Hard\ to\ Value\ Measure_{i,t} + \epsilon_{i,t})
+\end{split}
+\end{equation}
 
-# Investor Sentiment
+The dependent variable is whether the stock price reaches the price limit. 
+Theoretical Probability is from our calulation, Direction is a dummy variable 
+indicating the upper direction, Hard to Value Measure takes value from our 
+four measures.
 
+Table \ref{tab:hard1} and Table \ref{tab:hard2} present the regression results 
+on probability of reaching price limit on each of our four hard-to-value firm 
+measures. The Upper dummy controls for a lower gap of the practical 
+probability of upper direction. The coefficients of firm size (measured by log 
+market value) is −0.034, significant at 1% level, indicating smaller firms 
+have a larger probability reaching price limit, controling for the theoretical 
+probability. The coefficients of price-to-earnings ratio is 0.055, significant 
+at 1% level, indicating firms that are expected to grow more quickly have a 
+larger probability reaching price limit. The coefficients of the None-Dividend 
+dummy, which indicates that the firm pays no dividend the former fiscal year, 
+is 0.114, significant at 1% level, indicating firms that pays no dividend have 
+a larger probability reaching price limit. And finally, the coefficients of 
+price-to-dividend is 0.018, significant at 1% level, indicating the the lower 
+dividend payoff, the larger probability reaching the price limit. All the 
+coefficients are significant controling for the direction. As expected, the 
+magnet effect is stronger for firms that are harder to value.
 
+```{r hard1, results='asis'}
+stargazer(glmfit_S_VAL_MV1, glmfit_S_VAL_MV2, glmfit_S_VAL_PE_TTM1, 
+          glmfit_S_VAL_PE_TTM2, 
+          title = "Excess Probability Reaching Price Limit with Hard-to-Value Firms", 
+          table.placement = "H", 
+          dep.var.labels = "Reaching Price Limit", 
+          covariate.labels = c("Theoretical Probability", "Upper", "Market Value", 
+                               "Price to Earnings"), 
+          header = FALSE, 
+          label = "tab:hard1", 
+          notes.align = "l", 
+          notes.append = FALSE, 
+          notes = "The table present the results of the logistic regression")
+# \\parbox[t]{\\textwidth}{}
+```
+
+```{r hard2, results='asis'}
+stargazer(glmfit_NON_DIV1, glmfit_NON_DIV2, glmfit_S_PRICE_DIV_DPS1, 
+          glmfit_S_PRICE_DIV_DPS2, 
+          title = "Excess Probability Reaching Price Limit with Hard-to-Value Firms (Continued)", 
+          table.placement = "H", 
+          dep.var.labels = "Reaching Price Limit", 
+          covariate.labels = c("Theoretical Probability", "Upper", "None-Dividend", 
+                               "Price to Dividend"), 
+          header = FALSE,
+          label = "tab:hard2")
+```
+
+\newpage
+
+## Active-Traded Firms
+
+Since the more trade-active stock receive more attention, these stock may be 
+push up or down more quickly to the upper or lower price limit. Thus we argue 
+that the magnet effect is stronger for more active-traded stocks.
+
+We use trade volume in RMB to measure the trading dynamism. As trade volume 
+may be related to firm size, we also use an alternative scaled turnover ratio 
+proxy. We run logistic regression on the probability to reach price limit with 
+our two stock trading dynamism measures.
+
+\begin{equation}\label{eq:turn}
+\begin{split}
+Prob(Reaching\ Price\ Limit_{i,t}) &= Logistic(\alpha + \beta\cdot Theoretical\ Probability_{i,t} + \\
+&\gamma\cdot Direction_{i,t} + \delta\cdot Trading\ Dynamism\ Measure_{i,t} + \epsilon_{i,t})
+\end{split}
+\end{equation}
+
+Table \ref{tab:turn} presents the the regression results 
+on probability of reaching price limit on our two trading dynamism 
+measures. The coefficients of trading volume 
+(in RMB) is 0.048, significant at 1% level, indicating more active-trading firms 
+have a larger probability reaching price limit, controling for the theoretical 
+probability. When it turns to the turnover ratio, the coefficient is 0.120, 
+still a significant value at 1% level. All the 
+coefficients are significant controling for the direction. 
+It indicates that the stocks that gain more trading dynamism may be 
+push up or down more quickly to the upper or lower price limit, thus the magnet effect is stronger for them.
+
+```{r turn, results='asis'}
+stargazer(glmfit_S_DQ_AMOUNT1, glmfit_S_DQ_AMOUNT2, 
+          glmfit_S_DQ_FREETURNOVER1, glmfit_S_DQ_FREETURNOVER2, 
+          title = "Excess Probability Reaching Price Limit with Active-Trading Firms", 
+          table.placement = "H", 
+          dep.var.labels = "Reaching Price Limit", 
+          covariate.labels = c("Theoretical Probability", "Upper", "Trading Volume", "Turnover"), 
+          header = FALSE, 
+          label = "tab:turn")
+```
+
+\newpage
+
+## Necessary Triggers
+
+We argur that when the magnet effect takes effect, a trigger is necessary. 
+To verify this, we compare our original samlple with that whose obserbations 
+have reached the ±9% threshold from right beginning of the market opening, 
+that is, the overnight return is beyond ±9%. For this sample, because the 
+information is absord for a whole night, and the open price is discretely 
+discussed and ascertained from the call auction, it affects much less than 
+the sample that has a cross-threshold signal during continuous session.
+
+Table \ref{tab:trigger} presents the difference between the two groups. 
+The sample without a trigger has got a much higher 
+theoretical probability to `r Trigger_Results_Table[1, 3]` since the 
+longer time promises a larger volatility 
+arrange. The practical probability comes also a little higher to 
+`r Trigger_Results_Table[1, 2]`, however, the 
+difference `r Trigger_Results_Table[1, 4]` tends to be insignificant with 
+a t-statistic of `r Trigger_Results_Table[1, 5]` and p-value of 
+`r Trigger_Results_Table[1, 6]`. This suggests that a signal during 
+trading is a necessary trigger for the magnet effect.
+
+```{r trigger}
+Trigger_Results_Table %>% 
+  mutate_at(vars(`Prac. Prob.`:Diff.), formattable::percent, digits = 1L) %>% 
+  kable(caption = "Trigger and Probability of Reaching Price Limit", 
+        digits = 1L, 
+        format.args = list(big.mark = ","), 
+        booktabs = TRUE) %>% 
+  kable_styling(latex_options = "HOLD_position")
+```
+
+\newpage
+
+# Possible Explanation
+
+For the reason behind the magnet effect, we state that it may be 
+caused by liqudity concerns especially by institutional invesetors. When stock 
+price reaches price limit, the stock will be no longer tradable (at that 
+direction). For that sake, when it approaches the price limit, 
+investors may trade it in advance to avoid possible future illiquidity. 
+Institutional invesetors who have a more strict trading strategy may meet more 
+need to this liqudity concerns. 
+We partition our samlpe into quintiles according to institutional ownership. 
+In Table \ref{tab:inst} we report the results for the quintiles. With little 
+astonishment, firms with more institutional holding have are more stable in 
+the long run and have also a lower theoretical probability of reaching the 
+price limit. Howerver the practical probability tends to be almost identified 
+among all the quintiles. In this way, stocks with higher institutional holding 
+tend to be more likely to actually reach the price limit, which in some way 
+verifies our conjecture.
+
+```{r inst}
+Inst_Results_Table %>% 
+  mutate_at(vars(`Prac. Prob.`:Diff.), formattable::percent, digit = 1L) %>% 
+  kable(caption = "Institution Holding and Probability Reaching Price Limit", 
+        digits = 1L, 
+        format.args = list(big.mark = ","), 
+        booktabs = TRUE) %>% 
+  kable_styling(latex_options = c("HOLD_position"))
+```
+
+\newpage
+
+# Conclusion
+
+\vspace{4in}
+
+## References

@@ -18,6 +18,8 @@
 + If there was really bad news overnight, the price will hit the lower price limit at market opening, thus the maximum price percent change would be fixed at around -10% during the day.
 + Note that there exist more stock-days that have a maximum or minimum price percent change at zero, which are clipped for a neater prospect.
 
++ It indicates that whenever the magnet effect takes effect, investors will no longer care about what quality the stock is, growth or not, profitable or not.
+
 # Introduction
 + normal
 + certain price
@@ -31,5 +33,6 @@
 # 123
 + 要去掉开盘就到各个阈值的，在分析的时候
 + 涨到9%和开盘就到9%是不一样的
++ 最大的绝对涨幅（统计图）
 
 
